@@ -1,9 +1,6 @@
 package willydekeyser.security;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -14,19 +11,12 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClaimAccessor;
-import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
-import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.core.OAuth2Token;
-import org.springframework.security.oauth2.core.oidc.OidcIdToken;
-import org.springframework.security.oauth2.core.oidc.OidcScopes;
-import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
@@ -42,8 +32,6 @@ import org.springframework.util.Assert;
 
 public class CustomCodeGrantAuthenticationProvider implements AuthenticationProvider {
 
-	private static final String ERROR_URI = "https://datatracker.ietf.org/doc/html/rfc6749#section-5.2";
-	private static final OAuth2TokenType ID_TOKEN_TOKEN_TYPE = new OAuth2TokenType(OidcParameterNames.ID_TOKEN);
 	private final OAuth2AuthorizationService authorizationService;
 	private final OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator;
 	private final UserDetailsService userDetailsService;
@@ -87,9 +75,6 @@ public class CustomCodeGrantAuthenticationProvider implements AuthenticationProv
 		if (!registeredClient.getAuthorizationGrantTypes().contains(customCodeGrantAuthentication.getGrantType())) {
 			throw new OAuth2AuthenticationException(OAuth2ErrorCodes.UNAUTHORIZED_CLIENT);
 		}
-		if (authorizedScopes == null) {
-			throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_SCOPE);
-		}
 		authorizedScopes.forEach(scope ->{
 			if(!registeredClient.getScopes().contains(scope)) {
 				throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_SCOPE);
@@ -130,57 +115,11 @@ public class CustomCodeGrantAuthenticationProvider implements AuthenticationProv
 		} else {
 			authorizationBuilder.accessToken(accessToken);
 		}
-		
-		// Refresh Token
-		OAuth2RefreshToken refreshToken = null;
-		if (registeredClient.getAuthorizationGrantTypes().contains(AuthorizationGrantType.REFRESH_TOKEN) &&
-				!clientPrincipal.getClientAuthenticationMethod().equals(ClientAuthenticationMethod.NONE)) {
-
-			tokenContext = tokenContextBuilder.tokenType(OAuth2TokenType.REFRESH_TOKEN).build();
-			OAuth2Token generatedRefreshToken = this.tokenGenerator.generate(tokenContext);
-			if (!(generatedRefreshToken instanceof OAuth2RefreshToken)) {
-				OAuth2Error error = new OAuth2Error(OAuth2ErrorCodes.SERVER_ERROR,
-						"The token generator failed to generate the refresh token.", ERROR_URI);
-				throw new OAuth2AuthenticationException(error);
-			}
-
-			refreshToken = (OAuth2RefreshToken) generatedRefreshToken;
-			authorizationBuilder.refreshToken(refreshToken);
-		}
-		
-		// ----- ID token -----
-		OidcIdToken idToken;
-		if (customCodeGrantAuthentication.getScope().contains(OidcScopes.OPENID)) {
 			
-			tokenContext = tokenContextBuilder
-					.tokenType(ID_TOKEN_TOKEN_TYPE)
-					.authorization(authorizationBuilder.build())	// ID token customizer may need access to the access token and/or refresh token
-					.build();
-			OAuth2Token generatedIdToken = this.tokenGenerator.generate(tokenContext);
-			if (!(generatedIdToken instanceof Jwt)) {
-				OAuth2Error error = new OAuth2Error(OAuth2ErrorCodes.SERVER_ERROR,
-						"The token generator failed to generate the ID token.", ERROR_URI);
-				throw new OAuth2AuthenticationException(error);
-			}
-
-			idToken = new OidcIdToken(generatedIdToken.getTokenValue(), generatedIdToken.getIssuedAt(),
-					generatedIdToken.getExpiresAt(), ((Jwt) generatedIdToken).getClaims());
-			authorizationBuilder.token(idToken, (metadata) ->
-					metadata.put(OAuth2Authorization.Token.CLAIMS_METADATA_NAME, idToken.getClaims()));
-		} else {
-			idToken = null;
-		}	
-			
-		Map<String, Object> additionalParameters = Collections.emptyMap();
-		if (idToken != null) {
-			additionalParameters = new HashMap<>();
-			additionalParameters.put(OidcParameterNames.ID_TOKEN, idToken.getTokenValue());
-		}
-		
 		OAuth2Authorization authorization = authorizationBuilder.build();
 		this.authorizationService.save(authorization);
 
-		return new OAuth2AccessTokenAuthenticationToken(registeredClient, usernamePasswordAuthenticationToken, accessToken, refreshToken, additionalParameters);
+		return new OAuth2AccessTokenAuthenticationToken(registeredClient, usernamePasswordAuthenticationToken, accessToken);
 	}
 
 	@Override
