@@ -87,6 +87,9 @@ public class CustomCodeGrantAuthenticationProvider implements AuthenticationProv
 		if (!registeredClient.getAuthorizationGrantTypes().contains(customCodeGrantAuthentication.getGrantType())) {
 			throw new OAuth2AuthenticationException(OAuth2ErrorCodes.UNAUTHORIZED_CLIENT);
 		}
+		if (authorizedScopes == null) {
+			throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_SCOPE);
+		}
 		authorizedScopes.forEach(scope ->{
 			if(!registeredClient.getScopes().contains(scope)) {
 				throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_SCOPE);

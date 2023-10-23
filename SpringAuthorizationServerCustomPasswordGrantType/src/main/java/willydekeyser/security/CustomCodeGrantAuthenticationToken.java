@@ -5,6 +5,8 @@ import java.util.Set;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationGrantAuthenticationToken;
 import org.springframework.util.StringUtils;
@@ -24,6 +26,9 @@ public class CustomCodeGrantAuthenticationToken extends OAuth2AuthorizationGrant
 		this.username = (String) additionalParameters.get(OAuth2ParameterNames.USERNAME);
 		this.password = (String) additionalParameters.get(OAuth2ParameterNames.PASSWORD);
 		this.scope = (String) additionalParameters.get(OAuth2ParameterNames.SCOPE);
+		if (this.scope == null) {
+			throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_SCOPE);
+		}
 	}
 
 	public String getUsername() {
