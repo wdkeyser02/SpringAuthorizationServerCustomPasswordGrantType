@@ -35,7 +35,6 @@ public class CustomCodeGrantAuthenticationToken extends OAuth2AuthorizationGrant
 	}
 	
 	public Set<String> getScope() {
-		System.err.println(StringUtils.commaDelimitedListToSet(scope));
 		return StringUtils.commaDelimitedListToSet(scope.replace(" ", ""));
 	}
 
