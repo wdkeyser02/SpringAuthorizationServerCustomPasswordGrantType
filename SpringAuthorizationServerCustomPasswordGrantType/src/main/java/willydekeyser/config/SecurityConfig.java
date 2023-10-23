@@ -4,6 +4,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -37,6 +38,7 @@ import org.springframework.security.oauth2.server.authorization.config.annotatio
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
+import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.security.oauth2.server.authorization.token.DelegatingOAuth2TokenGenerator;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.JwtGenerator;
@@ -130,7 +132,8 @@ public class SecurityConfig {
 				.postLogoutRedirectUri("http://127.0.0.1:8080/")
 				.scope(OidcScopes.OPENID)
 				.scope(OidcScopes.PROFILE)
-				.clientSettings(ClientSettings.builder().requireAuthorizationConsent(false).build())
+				.clientSettings(ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
+				.tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofHours(1)).build())
 				.build();
 
 		return new InMemoryRegisteredClientRepository(oidcClient);
