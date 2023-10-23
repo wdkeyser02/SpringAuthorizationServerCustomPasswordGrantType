@@ -81,7 +81,7 @@ public class CustomCodeGrantAuthenticationProvider implements AuthenticationProv
 			}
 		});
 		Authentication usernamePasswordAuthenticationToken = 
-				new UsernamePasswordAuthenticationToken(username, authorizedScopes, user.getAuthorities());
+				new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
 					
 		DefaultOAuth2TokenContext.Builder tokenContextBuilder = DefaultOAuth2TokenContext.builder()
 				.registeredClient(registeredClient)
