@@ -193,6 +193,7 @@ public class CustomCodeGrantAuthenticationProvider implements AuthenticationProv
 		OAuth2Authorization authorization = authorizationBuilder
 				.accessToken(accessToken)
 				.refreshToken(refreshToken)
+				.authorizedScopes(authorizedScopes)
 				.attribute(Principal.class.getName(), usernamePasswordAuthenticationToken)
 				.build();
 		this.authorizationService.save(authorization);
