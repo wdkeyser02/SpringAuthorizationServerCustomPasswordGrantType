@@ -1,9 +1,16 @@
 package willydekeyser.security;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -11,6 +18,8 @@ import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.session.SessionInformation;
+import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -40,6 +49,7 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.security.provisioning.UserDetailsManager;
 import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
 
 public class CustomCodeGrantAuthenticationProvider implements AuthenticationProvider {
 
@@ -52,6 +62,7 @@ public class CustomCodeGrantAuthenticationProvider implements AuthenticationProv
 	private String username = new String();
 	private String password = new String();
 	private Set<String> authorizedScopes = new HashSet<>();
+	private SessionRegistry sessionRegistry;
 
 	public CustomCodeGrantAuthenticationProvider(OAuth2AuthorizationService authorizationService,
 			OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator, UserDetailsManager userDetailsService,
@@ -102,7 +113,7 @@ public class CustomCodeGrantAuthenticationProvider implements AuthenticationProv
 				.authorizationGrantType(customCodeGrantAuthentication.getGrantType())
 				.authorizationGrant(customCodeGrantAuthentication);
 
-		// Access Token
+		// ----- Access Token -----
 		OAuth2TokenContext tokenContext = tokenContextBuilder.tokenType(OAuth2TokenType.ACCESS_TOKEN).build();
 		OAuth2Token generatedAccessToken = this.tokenGenerator.generate(tokenContext);
 		if (generatedAccessToken == null) {
@@ -125,7 +136,7 @@ public class CustomCodeGrantAuthenticationProvider implements AuthenticationProv
 			authorizationBuilder.accessToken(accessToken);
 		}
 
-		// Refresh Token
+		// ----- Refresh Token -----
 		OAuth2RefreshToken refreshToken = null;
 		if (registeredClient.getAuthorizationGrantTypes().contains(AuthorizationGrantType.REFRESH_TOKEN)
 				&& !clientPrincipal.getClientAuthenticationMethod().equals(ClientAuthenticationMethod.NONE)) {
@@ -143,6 +154,18 @@ public class CustomCodeGrantAuthenticationProvider implements AuthenticationProv
 		// ----- ID token -----
 		OidcIdToken idToken;
 		if (customCodeGrantAuthentication.getScope().contains(OidcScopes.OPENID)) {
+			SessionInformation sessionInformation = getSessionInformation(usernamePasswordAuthenticationToken);
+			if (sessionInformation != null) {
+				try {
+					sessionInformation = new SessionInformation(sessionInformation.getPrincipal(),
+							createHash(sessionInformation.getSessionId()), sessionInformation.getLastRequest());
+				} catch (NoSuchAlgorithmException ex) {
+					OAuth2Error error = new OAuth2Error(OAuth2ErrorCodes.SERVER_ERROR,
+							"Failed to compute hash for Session ID.", ERROR_URI);
+					throw new OAuth2AuthenticationException(error);
+				}
+				tokenContextBuilder.put(SessionInformation.class, sessionInformation);
+			}
 			tokenContext = tokenContextBuilder
 					.tokenType(ID_TOKEN_TOKEN_TYPE)
 					.authorization(authorizationBuilder.build())
@@ -192,6 +215,34 @@ public class CustomCodeGrantAuthenticationProvider implements AuthenticationProv
 			return clientPrincipal;
 		}
 		throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_CLIENT);
+	}
+	
+	public void setSessionRegistry(SessionRegistry sessionRegistry) {
+		Assert.notNull(sessionRegistry, "sessionRegistry cannot be null");
+		this.sessionRegistry = sessionRegistry;
+	}
+
+	private SessionInformation getSessionInformation(Authentication principal) {
+		SessionInformation sessionInformation = null;
+		if (this.sessionRegistry != null) {
+			List<SessionInformation> sessions = this.sessionRegistry.getAllSessions(principal.getPrincipal(), false);
+			if (!CollectionUtils.isEmpty(sessions)) {
+				sessionInformation = sessions.get(0);
+				if (sessions.size() > 1) {
+					// Get the most recent session
+					sessions = new ArrayList<>(sessions);
+					sessions.sort(Comparator.comparing(SessionInformation::getLastRequest));
+					sessionInformation = sessions.get(sessions.size() - 1);
+				}
+			}
+		}
+		return sessionInformation;
+	}
+
+	private static String createHash(String value) throws NoSuchAlgorithmException {
+		MessageDigest md = MessageDigest.getInstance("SHA-256");
+		byte[] digest = md.digest(value.getBytes(StandardCharsets.US_ASCII));
+		return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
 	}
 
 }
